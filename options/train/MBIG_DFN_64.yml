@@ -1,0 +1,107 @@
+# ------------------------------------------------------------------------
+# Copyright (c) 2022 megvii-model. All Rights Reserved.
+# ------------------------------------------------------------------------
+# Modified from BasicSR (https://github.com/xinntao/BasicSR)
+# Copyright 2018-2020 BasicSR Authors
+# ------------------------------------------------------------------------
+# general settings
+name: MBIG-DFN64
+model_type: MIMOHeadImageRestorationModel
+scale: 1
+num_gpu: 4
+manual_seed: 33
+
+datasets:
+  train:
+    name: gopro-train
+    type: PairedImageDataset
+    dataroot_gt: /home/a/GoPro2/GoPro/train/sharp_crops.lmdb
+    dataroot_lq: /home/a/GoPro2/GoPro/train/blur_crops.lmdb
+
+    filename_tmpl: '{}'
+    io_backend:
+      type: lmdb
+
+    gt_size: 256
+    use_flip: true
+    use_rot: true
+
+    # data loader
+    use_shuffle: true
+    num_worker_per_gpu: 12
+    batch_size_per_gpu: 4
+    dataset_enlarge_ratio: 1
+    prefetch_mode: ~
+
+  val:
+    name: gopro-test
+    type: PairedImageDataset
+    dataroot_gt: /home/a/GoPro2/GoPro/test/target.lmdb
+    dataroot_lq: /home/a/GoPro2/GoPro/test/input.lmdb
+    io_backend:
+      type: lmdb
+
+
+network_g:
+  type: MBIG_DFN_Local
+  n_heads: 3
+  combinate_heads: true
+
+
+# path
+path:
+  pretrain_network_g:
+  strict_load_g: true
+  resume_state: ~
+
+# training settings
+train:
+  optim_g:
+    type: AdamW
+    lr: !!float 5e-4
+    weight_decay: !!float 1e-4
+    betas: [0.9, 0.999]
+
+  scheduler:
+    type: TrueCosineAnnealingLR
+    T_max: 600000
+    eta_min: !!float 1e-7
+
+  total_iter: 600000
+  warmup_iter: -1 # no warm up
+
+  # losses
+  pixel_opt:
+    type: MultiHeadL1Loss_FFTLoss
+    loss_weight: 1
+    reduction: mean
+
+# validation settings
+val:
+  val_freq: !!float 5000
+  save_img: false
+
+
+  metrics:
+    psnr: # metric name, can be arbitrary
+      type: calculate_psnr_mh
+      crop_border: 0
+      test_y_channel: false
+    ssim:
+      type: calculate_ssim_mh
+      crop_border: 0
+      test_y_channel: false
+
+# logging settings
+logger:
+  print_freq: 100
+  save_checkpoint_freq: !!float 5000
+  use_tb_logger: true
+  wandb:
+    project: ~
+    resume_id: ~
+
+# dist training settings
+dist_params:
+  backend: nccl
+  port: 22456
